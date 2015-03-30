@@ -103,9 +103,9 @@ func Supervise(command string, opt ...Options) (p *Process, err error) {
 	p = &Process{
 		command: command,
 		options: options,
-		Stdout:  make(chan *[]byte, 1000),
-		Stderr:  make(chan *[]byte, 1000),
-		Stdin:   make(chan *[]byte, 1000),
+		Stdout:  make(chan *[]byte, 1000000),
+		Stderr:  make(chan *[]byte, 1000000),
+		Stdin:   make(chan *[]byte, 1000000),
 		done:    make(chan string),
 		mu:      &sync.Mutex{},
 	}
