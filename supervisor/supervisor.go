@@ -310,13 +310,13 @@ func (p *Process) stop() {
 			if attempts < p.options.AttemptsBeforeTerminate {
 				p.event(3, "sending interrupt to process - attempt %d", attempts)
 				p.cmd.Process.Signal(os.Interrupt)
-				time.Sleep(1 * time.Second)
+				time.Sleep(time.Second)
 			} else {
 				p.event(4, "refuse to quit, kill it (pid %d)...", p.cmd.Process.Pid)
 				p.cmd.Process.Kill()
 				p.cmd.Process.Signal(os.Kill)
 				p.isKilled(true)
-				time.Sleep(1 * time.Second)
+				time.Sleep(time.Second)
 				break
 			}
 		}
