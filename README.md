@@ -46,7 +46,7 @@ func main() {
 
 	exit := make(chan bool)
 	done := p.NotifyDone(make(chan bool)) // process is done...
-	events := p.NotifyEvents(make(chan *spawner.Event,1000))
+	events := p.NotifyEvents(make(chan *supervisor.Event,1000))
 
 	// read stuff
 	go func() {

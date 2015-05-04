@@ -183,7 +183,7 @@ func (p *Process) IsDone() bool {
 
 // private
 func (p *Process) closeChannels() {
-	close(p.Stdin)
+	//close(p.Stdin)
 	close(p.Stderr)
 	close(p.Stdout)
 	if p.needToSendEvents {
@@ -307,7 +307,7 @@ func (p *Process) stop() {
 	for p.Running() {
 		if p.cmd != nil && p.cmd.Process != nil {
 			attempts++
-			if attempts < p.options.AttemptsBeforeTerminate {
+			if attempts <= p.options.AttemptsBeforeTerminate {
 				p.event(3, "sending interrupt to process - attempt %d", attempts)
 				p.cmd.Process.Signal(os.Interrupt)
 				time.Sleep(time.Second)
@@ -332,7 +332,7 @@ func (p *Process) stop() {
 			if i >= 3 {
 				return
 			}
-		case <-time.After(time.Second * 1):
+		case <-time.After(time.Second):
 			p.event(6, "waiting for goroutines to quit...")
 			t++
 			if t > 60 {
