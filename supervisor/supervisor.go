@@ -36,7 +36,7 @@ type (
 		options *Options
 
 		// safe variables
-		mu               *sync.Mutex
+		mu               sync.Mutex
 		cmd              *exec.Cmd
 		pid              int
 		needToNotifyDone bool
@@ -103,11 +103,10 @@ func Supervise(command string, opt ...Options) (p *Process, err error) {
 	p = &Process{
 		command: command,
 		options: options,
-		Stdout:  make(chan *[]byte, 1000000),
-		Stderr:  make(chan *[]byte, 1000000),
-		Stdin:   make(chan *[]byte, 1000000),
+		Stdout:  make(chan *[]byte),
+		Stderr:  make(chan *[]byte),
+		Stdin:   make(chan *[]byte),
 		done:    make(chan string),
-		mu:      &sync.Mutex{},
 	}
 
 	if err := p.start(); err != nil {
@@ -161,18 +160,15 @@ func (p *Process) Stop() {
 	if p.isClosed(true) {
 		done := make(chan bool)
 		p.stop()
-		if p.needToNotifyDone {
-			go func() {
+
+		go func() {
+			if p.needToNotifyDone {
 				p.doneChannel <- true
-				p.closeChannels()
-				done <- true
-			}()
-		} else {
-			go func() {
-				p.closeChannels()
-				done <- true
-			}()
-		}
+			}
+			time.AfterFunc(time.Second, p.closeChannels)
+			done <- true
+		}()
+
 		<-done
 	}
 }
@@ -183,7 +179,6 @@ func (p *Process) IsDone() bool {
 
 // private
 func (p *Process) closeChannels() {
-	//close(p.Stdin)
 	close(p.Stderr)
 	close(p.Stdout)
 	if p.needToSendEvents {
@@ -253,6 +248,8 @@ func (p *Process) watch() {
 			p.event(13, "reached max spawns...")
 			p.Stop() // cleanup
 			break
+		} else {
+			numSpawns += 1
 		}
 
 		if (time.Now().Sub(start).Seconds()) > 60 {
@@ -304,21 +301,20 @@ func (p *Process) stop() {
 	p.event(20, "going to kill process..")
 
 	attempts := 0
-	for p.Running() {
-		if p.cmd != nil && p.cmd.Process != nil {
-			attempts++
-			if attempts <= p.options.AttemptsBeforeTerminate {
-				p.event(3, "sending interrupt to process - attempt %d", attempts)
-				p.cmd.Process.Signal(os.Interrupt)
-				time.Sleep(time.Second)
-			} else {
-				p.event(4, "refuse to quit, kill it (pid %d)...", p.cmd.Process.Pid)
-				p.cmd.Process.Kill()
-				p.cmd.Process.Signal(os.Kill)
-				p.isKilled(true)
-				time.Sleep(time.Second)
-				break
-			}
+
+	for p.Running() && p.cmd != nil && p.cmd.Process != nil {
+		attempts++
+		if attempts < p.options.AttemptsBeforeTerminate {
+			p.event(3, "sending interrupt to process - attempt %d", attempts)
+			p.cmd.Process.Signal(os.Interrupt)
+			time.Sleep(time.Second)
+		} else {
+			p.event(4, "refuse to quit, kill it (pid %d)...", p.cmd.Process.Pid)
+			p.cmd.Process.Kill()
+			p.cmd.Process.Signal(os.Kill)
+			p.isKilled(true)
+			time.Sleep(time.Second)
+			break
 		}
 	}
 
@@ -335,7 +331,7 @@ func (p *Process) stop() {
 		case <-time.After(time.Second):
 			p.event(6, "waiting for goroutines to quit...")
 			t++
-			if t > 60 {
+			if t > 5 {
 				p.event(14, "waited too long exiting... some goroutines are still alive...")
 				return
 			}
