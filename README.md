@@ -1,6 +1,6 @@
-# go-supervisor
+# go-supervisor (V1)
 
-Small library for supervising child processes in `Go`, it exposes `Stdout`,`Stderr` and `Stdin` in the "Go way" using channles...
+Small library for supervising child processes in `Go`, it exposes `Stdout`,`Stderr` and `Stdin` in the "Go way" using channels...
 
 ## Example
 `example.bash` print stuff to stdout and stderr and quit after 5 seconds...
@@ -16,7 +16,7 @@ sleep 5
 package main
 
 import (
-	"github.com/kontera-technologies/go-supervisor/supervisor"
+	"github.com/kontera-technologies/go-supervisor"
 	"log"
 )
 

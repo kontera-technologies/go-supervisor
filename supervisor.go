@@ -2,7 +2,6 @@ package supervisor
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -27,10 +26,11 @@ type (
 		Stdin  chan *[]byte
 
 		// internal usage
-		done    chan string
-		closed  int32
-		killed  int32
-		stopped int32
+		closeHandlers func() bool
+		isdone        int32
+		stopping      int32
+		killed        int32
+		stopped       int32
 
 		command string
 		options *Options
@@ -56,6 +56,8 @@ type (
 		MaxSpawns               int      // Max spawn limit
 		StdoutIdleTime          int      // stop worker if we didn't recived stdout message in X seconds
 		StderrIdleTime          int      // stop worker if we didn't recived stderr message in X seconds
+		Env                     []string // see os.Cmd Env attribute
+		InheritEnv              bool     // take parent process environment variables
 
 		DelayBetweenSpawns func(currentSleep int) (sleep int) // in seconds
 	}
@@ -106,7 +108,6 @@ func Supervise(command string, opt ...Options) (p *Process, err error) {
 		Stdout:  make(chan *[]byte),
 		Stderr:  make(chan *[]byte),
 		Stdin:   make(chan *[]byte),
-		done:    make(chan string),
 	}
 
 	if err := p.start(); err != nil {
@@ -157,7 +158,9 @@ func (p *Process) Running() bool {
 }
 
 func (p *Process) Stop() {
-	if p.isClosed(true) {
+	if p.isDone(true) {
+		p.isStopping(true)
+		defer p.isStopping(false)
 		done := make(chan bool)
 		p.stop()
 
@@ -165,7 +168,8 @@ func (p *Process) Stop() {
 			if p.needToNotifyDone {
 				p.doneChannel <- true
 			}
-			time.AfterFunc(time.Second, p.closeChannels)
+			<-time.After(time.Second)
+			p.closeChannels()
 			done <- true
 		}()
 
@@ -174,11 +178,12 @@ func (p *Process) Stop() {
 }
 
 func (p *Process) IsDone() bool {
-	return p.isClosed()
+	return p.isDone() && !p.isStopping()
 }
 
 // private
 func (p *Process) closeChannels() {
+	//close(p.Stdin)
 	close(p.Stderr)
 	close(p.Stdout)
 	if p.needToSendEvents {
@@ -193,13 +198,22 @@ func (p *Process) start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.isClosed() {
+	if p.isDone() {
 		return nil
 	}
 
 	var err error
 
 	p.cmd = exec.Command(p.command, p.options.Args...)
+	env := make([]string, 0)
+
+	if p.options.InheritEnv {
+		env = os.Environ()
+	}
+
+	if p.options.Env != nil {
+		p.cmd.Env = append(env, p.options.Env...)
+	}
 
 	if p.options.Dir != "" {
 		p.cmd.Dir = p.options.Dir
@@ -213,9 +227,26 @@ func (p *Process) start() error {
 	p.isStopped(false)
 	p.isKilled(false)
 
-	go p.handleIn(stdin, p.Stdin)
-	go p.handleOut("stdout", stdout, p.Stdout, p.options.StdoutIdleTime)
-	go p.handleOut("stderr", stderr, p.Stderr, p.options.StderrIdleTime)
+	closeIn := p.handleIn(stdin, p.Stdin)
+	closeOut := p.handleOut("stdout", stdout, p.Stdout, p.options.StdoutIdleTime)
+	closeErr := p.handleOut("stderr", stderr, p.Stderr, p.options.StderrIdleTime)
+
+	p.closeHandlers = func() bool {
+		for k, v := range map[string]chan bool{
+			"stdin":  closeIn,
+			"stdout": closeOut,
+			"stderr": closeErr,
+		} {
+			p.event(5, "closing %s handler...", k)
+			select {
+			case v <- true:
+				<-v
+			case <-time.After(time.Second):
+				p.event(6, "%s is still open... memory leak...", k)
+			}
+		}
+		return false
+	}
 
 	p.event(8, "starting instance...")
 	err = p.cmd.Start()
@@ -238,11 +269,16 @@ func (p *Process) watch() {
 	for {
 		start := time.Now()
 		p.lastError = p.cmd.Wait()
-		if p.isClosed() {
+		time.Sleep(time.Second)
+		if p.isDone() {
 			break
 		}
 
-		p.event(7, "instance crashed...")
+		if p.lastError == nil {
+			p.event(12, "instance exited with exit code 0")
+		} else {
+			p.event(7, "instance crashed: %q", p.lastError.Error())
+		}
 
 		if numSpawns >= p.options.MaxSpawns {
 			p.event(13, "reached max spawns...")
@@ -274,7 +310,7 @@ func (p *Process) watch() {
 		for waited < milliseconds {
 			time.Sleep(10 * time.Millisecond)
 			waited += 10
-			if p.isClosed() {
+			if p.isDone() {
 				break
 			}
 		}
@@ -318,67 +354,29 @@ func (p *Process) stop() {
 		}
 	}
 
-	i := 0
-	t := 0
-	for {
-		select {
-		case who := <-p.done:
-			i++
-			p.event(5, "%s goroutine is done...", who)
-			if i >= 3 {
-				return
-			}
-		case <-time.After(time.Second):
-			p.event(6, "waiting for goroutines to quit...")
-			t++
-			if t > 5 {
-				p.event(14, "waited too long exiting... some goroutines are still alive...")
-				return
-			}
-		}
-	}
-
+	p.event(98, "closing handlers...")
+	p.closeHandlers()
 }
 
 // runs in its own goroutine
-func (p *Process) handleIn(in io.WriteCloser, channel chan *[]byte) {
+func (p *Process) handleIn(in io.WriteCloser, channel chan *[]byte) chan bool {
 	p.event(0, "opening stdin handler...")
-Loop:
-	for {
-		select {
-		case message, ok := <-channel:
-			if ok {
-				buff := bytes.NewBuffer(*message)
-				_, _ = buff.WriteString("\n")
-				_, err := in.Write(buff.Bytes())
-				if err != nil {
-					p.event(0, "can't write STDIN %s", err)
-					p.done <- "stdin"
-					break Loop
-				}
-			}
-		case f := <-p.done:
-			p.done <- f
-			p.done <- "stdin"
-			break Loop
-		}
-	}
-	p.event(19, "closing stdin handler...")
-}
-
-func (p *Process) getHeartbeater(name string, seconds int) chan bool {
-	c := make(chan bool, 1000)
+	c := make(chan bool)
 
 	go func() {
+		defer p.event(0, "stdin handler is now closed...")
 		for {
 			select {
-			case msg := <-c:
-				if !msg {
-					return
+			case message := <-channel:
+				if _, err := in.Write(append(*message, '\n')); err != nil {
+					select {
+					case <-c:
+						c <- true
+						return
+					}
 				}
-			case <-time.After(time.Second * time.Duration(seconds)):
-				p.event(15, "%s - reached timeout, restarting instance...", name)
-				p.stop()
+			case <-c:
+				c <- true
 				return
 			}
 		}
@@ -387,34 +385,99 @@ func (p *Process) getHeartbeater(name string, seconds int) chan bool {
 	return c
 }
 
+func (p *Process) getHeartbeater(name string, seconds int) chan bool {
+	c := make(chan bool, 1000)
+
+	go func() {
+		for {
+			t := time.NewTimer(time.Second * time.Duration(seconds))
+
+			select {
+			case msg := <-c:
+				if !msg {
+					return
+				}
+			case <-t.C:
+				p.event(15, "%s - reached timeout, restarting instance...", name)
+				p.stop()
+				return
+			}
+
+			t.Stop()
+		}
+	}()
+
+	return c
+}
+
 // runs in its own goroutine
-func (p *Process) handleOut(name string, out *bufio.Reader, channel chan *[]byte, heartbeat int) {
+func (p *Process) handleOut(name string, out *bufio.Reader, channel chan *[]byte, heartbeat int) chan bool {
 	p.event(0, "opening %v handler...", name)
-	var heartbeatChannel chan bool
-	shouldHeartbeat := heartbeat > 0
 
-	if shouldHeartbeat {
-		heartbeatChannel = p.getHeartbeater(name, heartbeat)
-	}
-	beat := func(k bool) {
+	c := make(chan bool)
+
+	go func() {
+		defer p.event(0, "%v handler is now closed...", name)
+		var heartbeatChannel chan bool
+		shouldHeartbeat := heartbeat > 0
+
 		if shouldHeartbeat {
-			heartbeatChannel <- k
+			heartbeatChannel = p.getHeartbeater(name, heartbeat)
 		}
-	}
-
-	for {
-		line, err := out.ReadBytes('\n')
-		beat(true)
-
-		if err != nil {
-			p.event(1, "can't read from %s: %s", name, err)
-			break
+		beat := func(k bool) {
+			if shouldHeartbeat {
+				heartbeatChannel <- k
+			}
 		}
-		channel <- &line
-	}
 
-	beat(false)
-	p.done <- name
+		defer func() {
+			err := recover()
+
+			if p != nil {
+				defer beat(false)
+				if err != nil {
+					p.event(90, "%s handler: %s , recovering...", name, err)
+					if !p.isDone() {
+						select {
+						case <-c:
+							c <- true
+							return
+						}
+					}
+				}
+			}
+		}()
+
+		for {
+			select {
+			case <-c:
+				c <- true
+				return
+			default:
+				line, err := out.ReadBytes('\n')
+				beat(true)
+
+				if err != nil {
+					p.event(1, "can't read from %s: %s", name, err)
+					select {
+					case <-c:
+						c <- true
+						return
+					}
+				}
+
+				select {
+				case channel <- &line:
+				case <-c:
+					c <- true
+					return
+				}
+			}
+		}
+
+	}()
+
+	return c
 }
 
 func (p *Process) event(code int, message string, format ...interface{}) {
@@ -428,7 +491,7 @@ func (p *Process) event(code int, message string, format ...interface{}) {
 		log.Printf("%s", msg.Message)
 	}
 
-	if p.needToSendEvents && !p.isClosed() {
+	if p.needToSendEvents && !p.isDone() {
 		p.eventsChannel <- msg
 	}
 }
@@ -459,12 +522,16 @@ func (p *Process) isKilled(killed ...bool) bool {
 	return isSomething(&p.killed, killed)
 }
 
-func (p *Process) isClosed(closed ...bool) bool {
-	return isSomething(&p.closed, closed)
+func (p *Process) isDone(done ...bool) bool {
+	return isSomething(&p.isdone, done)
 }
 
 func (p *Process) isStopped(stop ...bool) bool {
 	return isSomething(&p.stopped, stop)
+}
+
+func (p *Process) isStopping(stopping ...bool) bool {
+	return isSomething(&p.stopping, stopping)
 }
 
 func isSomething(n *int32, o []bool) bool {
