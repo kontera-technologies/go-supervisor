@@ -16,7 +16,7 @@ sleep 5
 package main
 
 import (
-	"github.com/kontera-technologies/go-supervisor/supervisor"
+	"github.com/kontera-technologies/go-supervisor"
 	"log"
 )
 
