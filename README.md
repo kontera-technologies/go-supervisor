@@ -1,4 +1,6 @@
 # go-supervisor (V2)
+[![Build Status](https://travis-ci.com/kontera-technologies/go-supervisor.svg?branch=master.v2)](https://travis-ci.com/kontera-technologies/go-supervisor)
+[![codecov](https://codecov.io/gh/kontera-technologies/go-supervisor/branch/master.v2/graph/badge.svg)](https://codecov.io/gh/kontera-technologies/go-supervisor)
 
 Small library for supervising child processes in `Go`, it exposes `Stdout`,`Stderr` and `Stdin` in the "Go way" using channels...
 
