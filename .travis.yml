@@ -1,0 +1,12 @@
+language: go
+go:
+  - '1.12'
+  - '1.13'
+  - '1.14'
+env:
+  global:
+    - GO111MODULE=on
+    - secure: OD5pJT1Fs/OICPTLXaDcZJ6UKT99zch+B2q4ivU5z69MfbfCADSrXoZ9/ZCOdgQnWf7lJinQGEWy0nIpwzhW8Bv0Kxkj2FqFxCa2TzkB2L/zQ0kpsPlqhdYZeszG/AgNi/3+HsNg32Olqs/lA4vXwvLMSrK6z5A6iHgztQxBm8s=
+script: go test -race -coverprofile=coverage.txt -covermode=atomic ${gobuild_args} ./...
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
