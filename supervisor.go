@@ -374,12 +374,6 @@ func (p *Process) waitAndNotify() {
 	}
 	p.ensureAllClosed()
 
-	if state.Success() {
-		p.notifyEvent("ProcessStopped", "Process existed successfully.")
-		p.notifyDone()
-		return
-	}
-
 	if !p.canRespawn() {
 		p.notifyEvent("RespawnError", "Max number of respawns reached.")
 		p.notifyDone()
