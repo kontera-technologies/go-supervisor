@@ -256,6 +256,7 @@ func chanToWriter(in <-chan []byte, out io.Writer, notifyEvent func(string, ...i
 	}
 }
 
+var ProducerTickerInterval = time.Second
 func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, stopC, heartbeat chan bool) {
 	defer close(closeWhenDone)
 
@@ -269,7 +270,7 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 		}
 	}
 
-	producerTicker := time.NewTicker(time.Millisecond)
+	producerTicker := time.NewTicker(ProducerTickerInterval)
 	defer producerTicker.Stop()
 	for {
 		if res,eof := producer(); res != nil {
