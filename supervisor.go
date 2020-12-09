@@ -269,6 +269,8 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 		}
 	}
 
+	producerTicker := time.NewTicker(time.Millisecond)
+	defer producerTicker.Stop()
 	for {
 		if res,eof := producer(); res != nil {
 			select {
@@ -289,7 +291,7 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 		case <-stopC:
 			cleanPipe()
 			return
-		default:
+		case <-producerTicker.C:
 		}
 	}
 }
