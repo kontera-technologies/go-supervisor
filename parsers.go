@@ -15,21 +15,23 @@ import (
 func MakeJsonLineParser(fromR io.Reader, bufferSize int) ProduceFn {
 	br := bufio.NewReaderSize(fromR, bufferSize)
 	dec := json.NewDecoder(br)
-	return func() (*interface{}, bool) {
+	return func() (*interface{}, error) {
 		var v interface{}
 		if err := dec.Decode(&v); err == nil {
-			return &v, false
-		} else if err != io.EOF {
-			rest, _ := ioutil.ReadAll(dec.Buffered())
-			restLines := bytes.SplitAfterN(rest, []byte{'\n'}, 2)
-			if len(restLines) > 1 {
-				// todo: test memory consumption on many mistakes (which will happen)
-				dec = json.NewDecoder(io.MultiReader(bytes.NewReader(restLines[1]), br))
-			} else {
-				dec = json.NewDecoder(br)
-			}
+			return &v, nil
+		} else if err == io.EOF {
+			return nil, err
 		}
-		return nil, true
+
+		rest, _ := ioutil.ReadAll(dec.Buffered())
+		restLines := bytes.SplitAfterN(rest, []byte{'\n'}, 2)
+		if len(restLines) > 1 {
+			// todo: test memory consumption on many mistakes (which will happen)
+			dec = json.NewDecoder(io.MultiReader(bytes.NewReader(restLines[1]), br))
+		} else {
+			dec = json.NewDecoder(br)
+		}
+		return nil, nil
 	}
 }
 
@@ -37,13 +39,13 @@ func MakeJsonLineParser(fromR io.Reader, bufferSize int) ProduceFn {
 // strings that contain the bytes read from the io.Reader (without the new-line suffix).
 func MakeLineParser(fromR io.Reader, bufferSize int) ProduceFn {
 	br := bufio.NewReaderSize(fromR, bufferSize)
-	return func() (*interface{}, bool) {
+	return func() (*interface{}, error) {
 		str, err := br.ReadString('\n')
 		if err == nil {
 			res := (interface{})(strings.TrimSuffix(str, string('\n')))
-			return &res, false
+			return &res, nil
 		}
-		return nil, err == io.EOF
+		return nil, err
 	}
 }
 
@@ -51,12 +53,12 @@ func MakeLineParser(fromR io.Reader, bufferSize int) ProduceFn {
 // byte slices that contain the bytes read from the io.Reader.
 func MakeBytesParser(fromR io.Reader, bufferSize int) ProduceFn {
 	br := bufio.NewReaderSize(fromR, bufferSize)
-	return func() (*interface{}, bool) {
+	return func() (*interface{}, error) {
 		v, err := br.ReadBytes('\n')
 		if err == nil {
 			res := (interface{})(bytes.TrimSuffix(v, []byte{'\n'}))
-			return &res, false
+			return &res, nil
 		}
-		return nil, err == io.EOF
+		return nil, err
 	}
 }

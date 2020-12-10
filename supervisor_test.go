@@ -105,14 +105,14 @@ func logProcessEvents(t testCommon, p *su.Process) (teardown func()) {
 
 func makeErrorParser(fromR io.Reader, parserSize int) su.ProduceFn {
 	p := su.MakeLineParser(fromR, parserSize)
-	return func() (*interface{}, bool) {
-		raw, isEof := p()
+	return func() (*interface{}, error) {
+		raw, err := p()
 		if raw != nil {
 			var res interface{}
 			res = errors.New((*raw).(string))
-			return &res, false
+			return &res, nil
 		}
-		return nil, isEof
+		return nil, err
 	}
 }
 

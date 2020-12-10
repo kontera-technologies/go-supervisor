@@ -71,7 +71,7 @@ func phaseString(s uint32) string {
 	return fmt.Sprintf("%s(%d)", str, s)
 }
 
-type ProduceFn func() (*interface{}, bool)
+type ProduceFn func() (*interface{}, error)
 
 type Process struct {
 	cmd             *exec.Cmd
@@ -256,15 +256,15 @@ func chanToWriter(in <-chan []byte, out io.Writer, notifyEvent func(string, ...i
 	}
 }
 
-var ProducerTickerInterval = time.Second
+var ProducerTickerInterval = time.Nanosecond
 func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, stopC, heartbeat chan bool) {
 	defer close(closeWhenDone)
 
 	cleanPipe := func() {
 		for {
-			if res, eof := producer(); res != nil {
+			if res, err := producer(); res != nil {
 				out <- res
-			} else if eof {
+			} else if err != nil {
 				return
 			}
 		}
@@ -273,7 +273,7 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 	producerTicker := time.NewTicker(ProducerTickerInterval)
 	defer producerTicker.Stop()
 	for {
-		if res,eof := producer(); res != nil {
+		if res, err := producer(); res != nil {
 			select {
 			case out <- res:
 				select {
@@ -284,7 +284,7 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 				cleanPipe()
 				return
 			}
-		} else if eof {
+		} else if err != nil {
 			return
 		}
 
