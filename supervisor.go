@@ -256,7 +256,9 @@ func chanToWriter(in <-chan []byte, out io.Writer, notifyEvent func(string, ...i
 	}
 }
 
+// ProducerTickerInterval is used to space out 2 consecutive calls to the same producer function - see readerToChan.
 var ProducerTickerInterval = time.Nanosecond
+
 func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, stopC, heartbeat chan bool) {
 	defer close(closeWhenDone)
 
