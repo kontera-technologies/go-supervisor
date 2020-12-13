@@ -18,8 +18,8 @@ import (
 const (
 	defaultMaxSpawns               = 1
 	defaultMaxSpawnAttempts        = 10
-	defaultMaxSpawnBackOff         = time.Minute
-	defaultMaxRespawnBackOff       = time.Second
+	defaultMaxSpawnBackOff         = 2*time.Minute
+	defaultMaxRespawnBackOff       = 2*time.Minute
 	defaultMaxInterruptAttempts    = 5
 	defaultMaxTerminateAttempts    = 5
 	defaultNotifyEventTimeout      = time.Millisecond
