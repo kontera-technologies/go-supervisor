@@ -23,6 +23,8 @@ func Example() {
 		MaxInterruptAttempts: 3,
 		MaxTerminateAttempts: 5,
 		IdleTimeout:          10 * time.Second,
+		MaxSpawnBackOff:      time.Second,
+		MaxRespawnBackOff:    time.Second,
 	})
 
 	exit := make(chan bool)
