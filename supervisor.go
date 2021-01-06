@@ -18,8 +18,8 @@ import (
 const (
 	defaultMaxSpawns               = 1
 	defaultMaxSpawnAttempts        = 10
-	defaultMaxSpawnBackOff         = time.Minute
-	defaultMaxRespawnBackOff       = time.Second
+	defaultMaxSpawnBackOff         = 2*time.Minute
+	defaultMaxRespawnBackOff       = 2*time.Minute
 	defaultMaxInterruptAttempts    = 5
 	defaultMaxTerminateAttempts    = 5
 	defaultNotifyEventTimeout      = time.Millisecond
@@ -71,7 +71,7 @@ func phaseString(s uint32) string {
 	return fmt.Sprintf("%s(%d)", str, s)
 }
 
-type ProduceFn func() (*interface{}, bool)
+type ProduceFn func() (*interface{}, error)
 
 type Process struct {
 	cmd             *exec.Cmd
@@ -261,16 +261,16 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 
 	cleanPipe := func() {
 		for {
-			if res, eof := producer(); res != nil {
+			if res, err := producer(); res != nil {
 				out <- res
-			} else if eof {
+			} else if err != nil {
 				return
 			}
 		}
 	}
 
 	for {
-		if res,eof := producer(); res != nil {
+		if res, err := producer(); res != nil {
 			select {
 			case out <- res:
 				select {
@@ -281,7 +281,7 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 				cleanPipe()
 				return
 			}
-		} else if eof {
+		} else if err != nil {
 			return
 		}
 
