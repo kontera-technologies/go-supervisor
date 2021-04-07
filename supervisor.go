@@ -213,6 +213,12 @@ func (p *Process) unprotectedStart() error {
 	var ensureOnce sync.Once
 	p.ensureAllClosed = func() {
 		ensureOnce.Do(func() {
+			select {
+			case <-p.stopC:
+			default:
+				log.Printf("[%s] ensureAllClosed was called before stopC channel was closed.", p.opts.Id)
+			}
+			if p.opts.Debug { log.Printf("[%s] Starting to ensure all pipes have closed.", p.opts.Id) }
 			if cErr := ensureClosed("stdin", isInClosed, inPipe.Close); cErr != nil {
 				log.Printf("[%s] Possible memory leak, stdin go-routine not closed. Error: %s", p.opts.Id, cErr)
 			}
