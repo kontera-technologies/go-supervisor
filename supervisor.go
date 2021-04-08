@@ -205,8 +205,8 @@ func (p *Process) unprotectedStart() error {
 	heartbeat, isMonitorClosed, isInClosed, isOutClosed, isErrClosed := make(chan bool), make(chan bool), make(chan bool), make(chan bool), make(chan bool)
 
 	go chanToWriter(p.opts.In, inPipe, p.notifyEvent, isInClosed, p.stopC, heartbeat)
-	go readerToChan(p.opts.OutputParser(outPipe, p.opts.ParserBufferSize), p.opts.Out, isOutClosed, p.stopC, heartbeat)
-	go readerToChan(p.opts.ErrorParser(errPipe, p.opts.ParserBufferSize), p.opts.Err, isErrClosed, p.stopC, nil)
+	go readerToChan(p.opts.OutputParser(outPipe, p.opts.ParserBufferSize), p.opts.Out, isOutClosed, p.stopC, heartbeat, "stdout")
+	go readerToChan(p.opts.ErrorParser(errPipe, p.opts.ParserBufferSize), p.opts.Err, isErrClosed, p.stopC, nil, "stderr")
 
 	go monitorHeartBeat(p.opts.IdleTimeout, heartbeat, isMonitorClosed, p.stopC, p.Restart, p.notifyEvent)
 
@@ -262,10 +262,14 @@ func chanToWriter(in <-chan []byte, out io.Writer, notifyEvent func(string, ...i
 	}
 }
 
-func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, stopC, heartbeat chan bool) {
+func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, stopC, heartbeat chan bool, name string) {
+	log.Printf("[%s][readerToChan] - start", name)
+	defer log.Printf("[%s][readerToChan] - end", name)
 	defer close(closeWhenDone)
 
 	cleanPipe := func() {
+		log.Printf("[%s][readerToChan][cleanPipe] - start", name)
+		defer log.Printf("[%s][readerToChan][cleanPipe] - end", name)
 		for {
 			if res, err := producer(); res != nil {
 				out <- res
