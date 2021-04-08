@@ -219,13 +219,19 @@ func (p *Process) unprotectedStart() error {
 				log.Printf("[%s] ensureAllClosed was called before stopC channel was closed.", p.opts.Id)
 			}
 			if p.opts.Debug { log.Printf("[%s] Starting to ensure all pipes have closed.", p.opts.Id) }
-			if cErr := ensureClosed("stdin", isInClosed, inPipe.Close); cErr != nil {
+			wrapClose := func(name string, fn func() error) func() error {
+				return func() error {
+					if p.opts.Debug { log.Printf("[%s][%s] Force close.", p.opts.Id, name) }
+					return fn()
+				}
+			}
+			if cErr := ensureClosed("stdin", isInClosed, wrapClose("stdin", inPipe.Close)); cErr != nil {
 				log.Printf("[%s] Possible memory leak, stdin go-routine not closed. Error: %s", p.opts.Id, cErr)
 			}
-			if cErr := ensureClosed("stdout", isOutClosed, outPipe.Close); cErr != nil {
+			if cErr := ensureClosed("stdout", isOutClosed, wrapClose("stdout", outPipe.Close)); cErr != nil {
 				log.Printf("[%s] Possible memory leak, stdout go-routine not closed. Error: %s", p.opts.Id, cErr)
 			}
-			if cErr := ensureClosed("stderr", isErrClosed, errPipe.Close); cErr != nil {
+			if cErr := ensureClosed("stderr", isErrClosed, wrapClose("stderr", errPipe.Close)); cErr != nil {
 				log.Printf("[%s] Possible memory leak, stderr go-routine not closed. Error: %s", p.opts.Id, cErr)
 			}
 			if cErr := ensureClosed("heartbeat monitor", isMonitorClosed, nil); cErr != nil {
