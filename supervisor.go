@@ -307,7 +307,6 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 //
 // When stopC closes, this function will exit immediately.
 func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, stopC chan bool, stop func() error, notifyEvent func(string, ...interface{})) {
-	defer close(isMonitorClosed)
 	t := time.NewTimer(idleTimeout)
 	defer t.Stop()
 
@@ -333,6 +332,7 @@ func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, sto
 		}
 	}
 
+	close(isMonitorClosed)
 	if err := stop(); err != nil {
 		notifyEvent("StopError", err.Error())
 	}
