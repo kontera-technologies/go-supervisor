@@ -268,7 +268,11 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 	cleanPipe := func() {
 		for {
 			if res, err := producer(); res != nil {
-				out <- res
+				select {
+				case out <- res:
+				default:
+					// During cleaning, throw out messages if they are not collect right away.
+				}
 			} else if err != nil {
 				return
 			}
@@ -314,7 +318,8 @@ func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, sto
 		select {
 		case <-stopC:
 			notifyEvent("StoppingHeartbeatMonitoring", "Stop signal received.")
-			return
+			close(isMonitorClosed)
+			return // Return early to avoid calling stop()
 
 		case alive = <-heartbeat:
 			if alive {

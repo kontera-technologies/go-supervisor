@@ -33,14 +33,6 @@ func safeStop(t *time.Timer) {
 	}
 }
 
-type testCommon interface {
-	Helper()
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-}
-
 func runFor(t *testing.T, from, to int, f func(t *testing.T, i int)) {
 	t.Helper()
 	for i := from; i < to; i++ {
@@ -51,10 +43,10 @@ func runFor(t *testing.T, from, to int, f func(t *testing.T, i int)) {
 	}
 }
 
-func fatalIfErr(t testCommon, err error) {
-	t.Helper()
+func fatalIfErr(tb testing.TB, err error) {
+	tb.Helper()
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
@@ -65,9 +57,9 @@ func assertExpectedEqualsActual(t *testing.T, expected, actual interface{}) {
 	}
 }
 
-func testDir(t testCommon) string {
+func testDir(tb testing.TB) string {
 	testDir, err := filepath.Abs("testdata")
-	fatalIfErr(t, err)
+	fatalIfErr(tb, err)
 	return testDir
 }
 
@@ -83,24 +75,22 @@ func funcName() string {
 
 // logProcessEvents is a helper function that registers an event notifier that
 // will pass all events to the logger.
-func logProcessEvents(t testCommon, p *su.Process) (teardown func()) {
-	t.Helper()
+func logProcessEvents(tb testing.TB, p *su.Process) {
+	tb.Helper()
 	closeC := make(chan interface{})
 	notifier := p.EventNotifier()
 	go func() {
+		tb.Helper()
 		for stop := false; !stop; {
 			select {
 			case x := <-notifier:
-				log.Printf("%+v", x)
-				// t.Logf("%+v", x)
+				tb.Logf("%+v", x)
 			case <-closeC:
 				stop = true
 			}
 		}
 	}()
-	return func() {
-		close(closeC)
-	}
+	tb.Cleanup(func() { close(closeC) })
 }
 
 func makeErrorParser(fromR io.Reader, parserSize int) su.ProduceFn {
@@ -117,12 +107,46 @@ func makeErrorParser(fromR io.Reader, parserSize int) su.ProduceFn {
 }
 
 // ensureProcessKilled logs a fatal error if the process isn't dead, and kills the process.
-func ensureProcessKilled(t testCommon, pid int) {
-	t.Helper()
+func ensureProcessKilled(tb testing.TB, pid int) {
+	tb.Helper()
 	signalErr := syscall.Kill(pid, syscall.Signal(0))
 	if signalErr != syscall.Errno(3) {
-		t.Errorf("child process (%d) is still running, killing it.", pid)
-		fatalIfErr(t, syscall.Kill(pid, syscall.SIGKILL))
+		tb.Errorf("child process (%d) is still running, killing it.", pid)
+		fatalIfErr(tb, syscall.Kill(pid, syscall.SIGKILL))
+	}
+}
+
+func TestStderrMemoryLeak(t *testing.T) {
+	p := su.NewProcess(su.ProcessOptions{
+		Id:           funcName(),
+		Name:         "./endless_errors.sh",
+		Dir:          testDir(t),
+		OutputParser: su.MakeBytesParser,
+		ErrorParser:  su.MakeBytesParser,
+		MaxSpawns:    1,
+		MaxSpawnAttempts: 1,
+	})
+
+	origLogOut := log.Writer()
+	defer log.SetOutput(origLogOut)
+	logOut := bytes.NewBuffer([]byte{})
+	log.SetOutput(logOut)
+
+	fatalIfErr(t, p.Start())
+
+	time.Sleep(time.Millisecond * 20)
+
+	fatalIfErr(t, p.Stop())
+
+	select {
+	case <-p.DoneNotifier():
+	case <-time.After(time.Second):
+		t.Errorf("Timeout")
+	}
+
+	logOutStr := logOut.String()
+	if len(logOutStr) > 0 {
+		t.Errorf("Global logger was used - probably to print errors: \n%s", logOutStr)
 	}
 }
 

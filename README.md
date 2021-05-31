@@ -50,15 +50,15 @@ func main() {
 		for {
 			select {
 			case msg := <-p.Stdout():
-				fmt.Printf("Recived STDOUT message: %s\n", *msg)
+				fmt.Printf("Received STDOUT message: %s\n", *msg)
 			case msg := <-p.Stderr():
-				fmt.Printf("Recived STDERR message: %s\n", *msg)
+				fmt.Printf("Received STDERR message: %s\n", *msg)
 			case event := <-events:
 				switch event.Code {
 				case "ProcessStart":
-					fmt.Printf("Recived event: %s\n", event.Code)
+					fmt.Printf("Received event: %s\n", event.Code)
 				default:
-					fmt.Printf("Recived event: %s - %s\n", event.Code, event.Message)
+					fmt.Printf("Received event: %s - %s\n", event.Code, event.Message)
 				}
 			case <-p.DoneNotifier():
 				fmt.Println("Closing loop we are done...")
@@ -78,32 +78,32 @@ func main() {
 
 running the program should produce this output
 ```
-Recived event: ProcessStart
-Recived STDOUT message: STDOUT MESSAGE
-Recived STDERR message: STDERR MESSAGE
-Recived event: ProcessDone - exit status 0
-Recived event: StoppingHeartbeatMonitoring - Stop signal received.
-Recived event: Sleep - Sleeping for 1s before respwaning instance.
-Recived event: ProcessRespawn - Trying to respawn instance.
-Recived event: ProcessStart
-Recived STDOUT message: STDOUT MESSAGE
-Recived STDERR message: STDERR MESSAGE
-Recived event: ProcessDone - exit status 0
-Recived event: StoppingHeartbeatMonitoring - Stop signal received.
-Recived event: Sleep - Sleeping for 1s before respwaning instance.
-Recived event: ProcessRespawn - Trying to respawn instance.
-Recived event: ProcessStart
-Recived STDOUT message: STDOUT MESSAGE
-Recived STDERR message: STDERR MESSAGE
-Recived event: ProcessDone - exit status 0
-Recived event: StoppingHeartbeatMonitoring - Stop signal received.
-Recived event: Sleep - Sleeping for 1s before respwaning instance.
-Recived event: ProcessRespawn - Trying to respawn instance.
-Recived event: ProcessStart
-Recived STDOUT message: STDOUT MESSAGE
-Recived STDERR message: STDERR MESSAGE
-Recived event: ProcessDone - exit status 0
-Recived event: StoppingHeartbeatMonitoring - Stop signal received.
-Recived event: RespawnError - Max number of respawns reached.
+Received event: ProcessStart
+Received STDOUT message: STDOUT MESSAGE
+Received STDERR message: STDERR MESSAGE
+Received event: ProcessDone - exit status 0
+Received event: StoppingHeartbeatMonitoring - Stop signal received.
+Received event: Sleep - Sleeping for 1s before respwaning instance.
+Received event: ProcessRespawn - Trying to respawn instance.
+Received event: ProcessStart
+Received STDOUT message: STDOUT MESSAGE
+Received STDERR message: STDERR MESSAGE
+Received event: ProcessDone - exit status 0
+Received event: StoppingHeartbeatMonitoring - Stop signal received.
+Received event: Sleep - Sleeping for 1s before respwaning instance.
+Received event: ProcessRespawn - Trying to respawn instance.
+Received event: ProcessStart
+Received STDOUT message: STDOUT MESSAGE
+Received STDERR message: STDERR MESSAGE
+Received event: ProcessDone - exit status 0
+Received event: StoppingHeartbeatMonitoring - Stop signal received.
+Received event: Sleep - Sleeping for 1s before respwaning instance.
+Received event: ProcessRespawn - Trying to respawn instance.
+Received event: ProcessStart
+Received STDOUT message: STDOUT MESSAGE
+Received STDERR message: STDERR MESSAGE
+Received event: ProcessDone - exit status 0
+Received event: StoppingHeartbeatMonitoring - Stop signal received.
+Received event: RespawnError - Max number of respawns reached.
 Closing loop we are done...
 ```
