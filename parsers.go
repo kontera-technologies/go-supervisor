@@ -49,7 +49,7 @@ func MakeLineParser(fromR io.Reader, bufferSize int) ProduceFn {
 	}
 }
 
-// MakeLineParser is called with an io.Reader, and returns a function, that when called will output references to
+// MakeBytesParser is called with an io.Reader, and returns a function, that when called will output references to
 // byte slices that contain the bytes read from the io.Reader.
 func MakeBytesParser(fromR io.Reader, bufferSize int) ProduceFn {
 	br := bufio.NewReaderSize(fromR, bufferSize)
