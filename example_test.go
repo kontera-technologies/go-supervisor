@@ -37,10 +37,10 @@ func Example() {
 			case msg := <-p.Stderr():
 				fmt.Printf("Received STDERR message: %s\n", *msg)
 			case event := <-events:
-				if event.Message != "" {
-					fmt.Printf("Received event: %s - %s\n", event.Code, event.Message)
-				} else {
+				if event.Code == "ProcessStart" || event.Message == "" {
 					fmt.Printf("Received event: %s\n", event.Code)
+				} else {
+					fmt.Printf("Received event: %s - %s\n", event.Code, event.Message)
 				}
 			case <-p.DoneNotifier():
 				fmt.Println("Closing loop we are done...")
