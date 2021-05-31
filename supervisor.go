@@ -318,7 +318,8 @@ func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, sto
 		select {
 		case <-stopC:
 			notifyEvent("StoppingHeartbeatMonitoring", "Stop signal received.")
-			alive = false
+			close(isMonitorClosed)
+			return
 
 		case alive = <-heartbeat:
 			if alive {
