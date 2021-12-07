@@ -118,12 +118,12 @@ func ensureProcessKilled(tb testing.TB, pid int) {
 
 func TestStderrMemoryLeak(t *testing.T) {
 	p := su.NewProcess(su.ProcessOptions{
-		Id:           funcName(),
-		Name:         "./endless_errors.sh",
-		Dir:          testDir(t),
-		OutputParser: su.MakeBytesParser,
-		ErrorParser:  su.MakeBytesParser,
-		MaxSpawns:    1,
+		Id:               funcName(),
+		Name:             "./endless_errors.sh",
+		Dir:              testDir(t),
+		OutputParser:     su.MakeBytesParser,
+		ErrorParser:      su.MakeBytesParser,
+		MaxSpawns:        1,
 		MaxSpawnAttempts: 1,
 	})
 
@@ -169,7 +169,7 @@ func TestJsonParser(t *testing.T) {
 	fatalIfErr(t, p.Start())
 	defer p.Stop()
 
-	time.AfterFunc(time.Millisecond * 30, func() {
+	time.AfterFunc(time.Millisecond*30, func() {
 		fatalIfErr(t, p.Stop())
 	})
 
@@ -198,7 +198,7 @@ invalid character '}'
 {"c":"d"}`))
 	tmp := su.MakeJsonLineParser(out, 4096)
 	p := func() *interface{} {
-		a,_ := tmp()
+		a, _ := tmp()
 		return a
 	}
 
@@ -264,7 +264,7 @@ func TestMakeLineParser(t *testing.T) {
 	c := make(chan *interface{})
 	go func() {
 		x := su.MakeLineParser(out, 0)
-		for a,_ := x(); a != nil; a,_ = x() {
+		for a, _ := x(); a != nil; a, _ = x() {
 			c <- a
 		}
 		close(c)
@@ -302,7 +302,7 @@ func TestProcess_Signal(t *testing.T) {
 	pid := p.Pid()
 
 	c := make(chan bool)
-	time.AfterFunc(time.Millisecond * 70, func() {
+	time.AfterFunc(time.Millisecond*70, func() {
 		fatalIfErr(t, syscall.Kill(-p.Pid(), syscall.SIGINT))
 		c <- true
 	})
@@ -327,15 +327,15 @@ func TestProcess_Signal(t *testing.T) {
 
 func TestProcess_Close(t *testing.T) {
 	p := su.NewProcess(su.ProcessOptions{
-		Id:            funcName(),
-		Name:          "./trap.sh",
-		Args:          []string{"endless.sh"},
-		Dir:           testDir(t),
-		OutputParser:  su.MakeLineParser,
-		ErrorParser:   makeErrorParser,
-		EventNotifier: make(chan su.Event, 10),
-		MaxInterruptAttempts: 1,
-		MaxTerminateAttempts: 2,
+		Id:                      funcName(),
+		Name:                    "./trap.sh",
+		Args:                    []string{"endless.sh"},
+		Dir:                     testDir(t),
+		OutputParser:            su.MakeLineParser,
+		ErrorParser:             makeErrorParser,
+		EventNotifier:           make(chan su.Event, 10),
+		MaxInterruptAttempts:    1,
+		MaxTerminateAttempts:    2,
 		TerminationGraceTimeout: time.Millisecond,
 	})
 
@@ -379,7 +379,7 @@ func TestProcess_Close(t *testing.T) {
 			default:
 			}
 		}
-		for code,err := range errs {
+		for code, err := range errs {
 			t.Errorf(`expected a %s event - "%s"`, code, err)
 		}
 	})
@@ -470,15 +470,15 @@ func TestProcess_Restart(t *testing.T) {
 
 	// initialGoroutines := runtime.NumGoroutine()
 	p := su.NewProcess(su.ProcessOptions{
-		Id:                funcName(),
-		Name:              "./endless.sh",
-		Dir:               testDir(t),
-		OutputParser:      su.MakeLineParser,
-		ErrorParser:       makeErrorParser,
-		Out:               make(chan *interface{}, 5),
-		IdleTimeout:       time.Millisecond * 30,
-		MaxSpawns:         2,
-		MaxRespawnBackOff: time.Microsecond * 100,
+		Id:                      funcName(),
+		Name:                    "./endless.sh",
+		Dir:                     testDir(t),
+		OutputParser:            su.MakeLineParser,
+		ErrorParser:             makeErrorParser,
+		Out:                     make(chan *interface{}, 5),
+		IdleTimeout:             time.Millisecond * 30,
+		MaxSpawns:               2,
+		MaxRespawnBackOff:       time.Microsecond * 100,
 		TerminationGraceTimeout: time.Millisecond,
 	})
 
@@ -716,4 +716,21 @@ func test_timings(t *testing.T) {
 	<-pDone
 
 	log.Println(prodInNum, prodOutNum, incOutNum)
+}
+
+func TestMonitorRunTimeout(t *testing.T) {
+	heartbeat, isMonitorClosed, stopC := make(chan bool), make(chan bool), make(chan bool)
+	var result string
+	var resEvent string
+	stopF := func() error {
+		result = "Stopped"
+		return nil
+	}
+	eventNotify := func(event string, message ...interface{}) {
+		resEvent = event
+	}
+	go su.MonitorHeartBeat(time.Duration(20000000), time.Duration(10000000), heartbeat, isMonitorClosed, stopC, stopF, eventNotify)
+	time.Sleep(time.Duration(20000000))
+	assertExpectedEqualsActual(t, resEvent, "RunTimePassed")
+	assertExpectedEqualsActual(t, result, "Stopped")
 }

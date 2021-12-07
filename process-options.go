@@ -58,7 +58,7 @@ type ProcessOptions struct {
 	Debug bool
 
 	OutputParser func(fromR io.Reader, bufferSize int) ProduceFn
-	ErrorParser func(fromR io.Reader, bufferSize int) ProduceFn
+	ErrorParser  func(fromR io.Reader, bufferSize int) ProduceFn
 
 	// MaxSpawns is the maximum number of times that a process can be spawned
 	// Set to -1, for an unlimited amount of times.
@@ -100,7 +100,7 @@ type ProcessOptions struct {
 	// IdleTimeout is the duration that the process can remain idle (no output) before we terminate the process.
 	// Set to -1, for an unlimited idle timeout (not recommended)
 	// Will use defaultIdleTimeout when set to 0.
-	IdleTimeout  time.Duration
+	IdleTimeout time.Duration
 
 	// TerminationGraceTimeout is the duration of time that the supervisor will wait after sending interrupt/terminate
 	// signals, before checking if the process is still alive.
@@ -110,6 +110,11 @@ type ProcessOptions struct {
 	// EventTimeFormat is the time format used when events are marshaled to string.
 	// Will use defaultEventTimeFormat when set to "".
 	EventTimeFormat string
+
+	// RunTimeout is the duration that the process can run before we terminate the process.
+	// Set to <= 0, for an unlimited run timeout
+	// Will use defaultRunTimeout when set to 0.
+	RunTimeout time.Duration
 }
 
 // init initializes the opts structure with default and required options.
@@ -154,11 +159,17 @@ func initProcessOptions(opts ProcessOptions) *ProcessOptions {
 	if opts.IdleTimeout == 0 {
 		opts.IdleTimeout = defaultIdleTimeout
 	}
+	if opts.IdleTimeout == -1 {
+		opts.IdleTimeout = time.Duration(maxDuration)
+	}
 	if opts.TerminationGraceTimeout == 0 {
 		opts.TerminationGraceTimeout = defaultTerminationGraceTimeout
 	}
 	if opts.EventTimeFormat == "" {
 		opts.EventTimeFormat = defaultEventTimeFormat
+	}
+	if opts.RunTimeout <= 0 {
+		opts.RunTimeout = defaultRunTimeout
 	}
 	if opts.In == nil {
 		opts.In = make(chan []byte)
