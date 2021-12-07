@@ -159,7 +159,7 @@ func initProcessOptions(opts ProcessOptions) *ProcessOptions {
 	if opts.IdleTimeout == 0 {
 		opts.IdleTimeout = defaultIdleTimeout
 	}
-	if opts.IdleTimeout == -1 {
+	if opts.IdleTimeout < 0 {
 		opts.IdleTimeout = time.Duration(maxDuration)
 	}
 	if opts.TerminationGraceTimeout == 0 {

@@ -720,17 +720,18 @@ func test_timings(t *testing.T) {
 
 func TestMonitorRunTimeout(t *testing.T) {
 	heartbeat, isMonitorClosed, stopC := make(chan bool), make(chan bool), make(chan bool)
-	var result string
-	var resEvent string
+	result := make(chan string)
+	resEvent := make(chan string)
+
 	stopF := func() error {
-		result = "Stopped"
+		result <- "Stopped"
 		return nil
 	}
 	eventNotify := func(event string, message ...interface{}) {
-		resEvent = event
+		resEvent <- event
 	}
-	go su.MonitorHeartBeat(time.Duration(20000000), time.Duration(10000000), heartbeat, isMonitorClosed, stopC, stopF, eventNotify)
-	time.Sleep(time.Duration(20000000))
-	assertExpectedEqualsActual(t, resEvent, "RunTimePassed")
-	assertExpectedEqualsActual(t, result, "Stopped")
+	go su.MonitorHeartBeat(20*time.Millisecond, 10*time.Millisecond, heartbeat, isMonitorClosed, stopC, stopF, eventNotify)
+	time.Sleep(20 * time.Millisecond)
+	assertExpectedEqualsActual(t, <-resEvent, "RunTimePassed")
+	assertExpectedEqualsActual(t, <-result, "Stopped")
 }
