@@ -15,27 +15,29 @@ import (
 	"time"
 )
 
+const maxDuration = 1<<63 - 1
 const (
 	defaultMaxSpawns               = 1
 	defaultMaxSpawnAttempts        = 10
-	defaultMaxSpawnBackOff         = 2*time.Minute
-	defaultMaxRespawnBackOff       = 2*time.Minute
+	defaultMaxSpawnBackOff         = 2 * time.Minute
+	defaultMaxRespawnBackOff       = 2 * time.Minute
 	defaultMaxInterruptAttempts    = 5
 	defaultMaxTerminateAttempts    = 5
 	defaultNotifyEventTimeout      = time.Millisecond
 	defaultParserBufferSize        = 4096
 	defaultIdleTimeout             = 10 * time.Second
+	defaultRunTimeout              = time.Duration(maxDuration)
 	defaultTerminationGraceTimeout = time.Second
-	defaultEventTimeFormat = time.RFC3339Nano
+	defaultEventTimeFormat         = time.RFC3339Nano
 )
 
 var EnsureClosedTimeout = time.Second
 
 type Event struct {
-	Id      string
-	Code    string
-	Message string
-	Time    time.Time
+	Id         string
+	Code       string
+	Message    string
+	Time       time.Time
 	TimeFormat string
 }
 
@@ -208,7 +210,7 @@ func (p *Process) unprotectedStart() error {
 	go readerToChan(p.opts.OutputParser(outPipe, p.opts.ParserBufferSize), p.opts.Out, isOutClosed, p.stopC, heartbeat)
 	go readerToChan(p.opts.ErrorParser(errPipe, p.opts.ParserBufferSize), p.opts.Err, isErrClosed, p.stopC, nil)
 
-	go monitorHeartBeat(p.opts.IdleTimeout, heartbeat, isMonitorClosed, p.stopC, p.Stop, p.notifyEvent)
+	go MonitorHeartBeat(p.opts.IdleTimeout, p.opts.RunTimeout, heartbeat, isMonitorClosed, p.stopC, p.Stop, p.notifyEvent)
 
 	var ensureOnce sync.Once
 	p.ensureAllClosed = func() {
@@ -218,7 +220,9 @@ func (p *Process) unprotectedStart() error {
 			default:
 				log.Printf("[%s] ensureAllClosed was called before stopC channel was closed.", p.opts.Id)
 			}
-			if p.opts.Debug { log.Printf("[%s] Starting to ensure all pipes have closed.", p.opts.Id) }
+			if p.opts.Debug {
+				log.Printf("[%s] Starting to ensure all pipes have closed.", p.opts.Id)
+			}
 			if cErr := ensureClosed("stdin", isInClosed, inPipe.Close); cErr != nil {
 				log.Printf("[%s] Possible memory leak, stdin go-routine not closed. Error: %s", p.opts.Id, cErr)
 			}
@@ -304,16 +308,17 @@ func readerToChan(producer ProduceFn, out chan<- *interface{}, closeWhenDone, st
 	}
 }
 
-// monitorHeartBeat monitors the heartbeat channel and stops the process if idleTimeout time is passed without a
-// positive heartbeat, or if a negative heartbeat is passed.
+// MonitorHeartBeat monitors the heartbeat channel and stops the process if idleTimeout time is passed without a
+// positive heartbeat, or if a negative heartbeat is passed, or if the run timeout passed.
 //
 // isMonitorClosed will be closed when this function exists.
 //
 // When stopC closes, this function will exit immediately.
-func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, stopC chan bool, stop func() error, notifyEvent func(string, ...interface{})) {
+func MonitorHeartBeat(idleTimeout time.Duration, runTimeout time.Duration, heartbeat, isMonitorClosed, stopC chan bool, stop func() error, notifyEvent func(string, ...interface{})) {
 	t := time.NewTimer(idleTimeout)
+	r := time.NewTimer(runTimeout)
 	defer t.Stop()
-
+	defer r.Stop()
 	for alive := true; alive; {
 		select {
 		case <-stopC:
@@ -334,6 +339,9 @@ func monitorHeartBeat(idleTimeout time.Duration, heartbeat, isMonitorClosed, sto
 		case <-t.C:
 			alive = false
 			notifyEvent("MissingHeartbeat", "Stopping process.")
+		case <-r.C:
+			alive = false
+			notifyEvent("RunTimePassed", "Stopping process.")
 		}
 	}
 
@@ -584,10 +592,10 @@ func (p *Process) EventNotifier() chan Event {
 func (p *Process) notifyEvent(code string, message ...interface{}) {
 	// Create the event before calling Lock.
 	ev := Event{
-		Id:      p.opts.Id,
-		Code:    code,
-		Message: fmt.Sprint(message...),
-		Time:    time.Now(),
+		Id:         p.opts.Id,
+		Code:       code,
+		Message:    fmt.Sprint(message...),
+		Time:       time.Now(),
 		TimeFormat: p.opts.EventTimeFormat,
 	}
 
